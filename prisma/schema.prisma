@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String      @id @default(cuid())
+  email           String      @unique
+  password        String
+  firstName       String
+  lastName        String
+  twoFactorEnabled Boolean    @default(false)
+  twoFactorSecret String?     // for 2FA (e.g., TOTP)
+  wallets         Wallet[]
+  transactions    Transaction[] @relation("TransactionInitiator")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model Wallet {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  currency     String     // e.g., "USD", "EUR", "NGN"
+  balance      Decimal    @default(0)  // Use Decimal for money
+  isActive     Boolean    @default(true)
+  transactions Transaction[] @relation("TransactionWallet")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([userId, currency]) // One wallet per user per currency
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  amount          Decimal
+  currency        String   // e.g., "USD"
+  type            String   // "debit" | "credit"
+  description     String?
+  status          String   @default("completed") // "pending", "completed", "failed"
+  walletId        String
+  wallet          Wallet   @relation("TransactionWallet", fields: [walletId], references: [id])
+  initiatorId     String?  // User who initiated
+  initiator       User?    @relation("TransactionInitiator", fields: [initiatorId], references: [id])
+  externalId      String?  // e.g., Stripe charge ID
+  metadata        Json?    // Extra data (e.g., { reason: "card_payment" })
+  createdAt       DateTime @default(now())
+}
+
+// Optional: Virtual Card (we'll add later)
+// model VirtualCard {
+//   id         String   @id @default(cuid())
+//   walletId   String
+//   wallet     Wallet   @relation(fields: [walletId], references: [id])
+//   last4      String
+//   brand      String   // "Visa", "Mastercard"
+//   expMonth   Int
+//   expYear    Int
+//   cvv        String?  // Never store real CVV — this is placeholder
+//   status     String   // "active", "frozen", "canceled"
+//   createdAt  DateTime @default(now())
+// }
