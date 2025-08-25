@@ -16,14 +16,23 @@ export default function Login() {
 
     try {
       const res = await api.post('/auth/login', { email, password });
-      const { token, user } = res.data;
+      
+      // Check if 2FA is required
+      if (res.data.requires2FA) {
+        // Save temp token and redirect to 2FA page
+        localStorage.setItem('tempToken', res.data.tempToken);
+        navigate('/2fa');
+      } else {
+        // Standard login flow
+        const { token, user } = res.data;
 
-      // Save to localStorage
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+        // Save to localStorage
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
 
-      // Redirect to dashboard
-      navigate('/dashboard');
+        // Redirect to dashboard
+        navigate('/dashboard');
+      }
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'Login failed';
       setError(errorMsg);

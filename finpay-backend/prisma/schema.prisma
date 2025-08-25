@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String        @id @default(cuid())
+  email                String        @unique
+  password             String
+  firstName            String
+  lastName             String
+  twoFactorEnabled     Boolean       @default(false)
+  twoFactorSecret      String? // for 2FA (e.g., TOTP)
+  wallets              Wallet[]
+  transactions         Transaction[] @relation("TransactionInitiator")
+  receivedTransactions Transaction[] @relation("TransactionCounterparty")
+  invoices        Invoice[] 
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+}
+
+model Wallet {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  currency     String // e.g., "USD", "EUR", "NGN"
+  balance      Decimal       @default(0) // Use Decimal for money
+  isActive     Boolean       @default(true)
+  transactions Transaction[] @relation("TransactionWallet")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  VirtualCard  VirtualCard[]
+
+  @@unique([userId, currency]) // One wallet per user per currency
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  amount      Decimal
+  currency    String
+  type        String
+  description String?
+  status      String   @default("completed")
+  walletId    String
+  wallet      Wallet   @relation("TransactionWallet", fields: [walletId], references: [id])
+  initiatorId String?
+  initiator   User?    @relation("TransactionInitiator", fields: [initiatorId], references: [id])
+  counterpartyId String?
+  counterparty User?   @relation("TransactionCounterparty", fields: [counterpartyId], references: [id])
+  invoiceId   String?
+  invoice     Invoice? @relation("InvoiceTransactions", fields: [invoiceId], references: [id])
+  externalId  String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([initiatorId])
+  @@index([counterpartyId])
+  @@index([walletId])
+  @@index([invoiceId])
+}
+
+model VirtualCard {
+  id        String   @id @default(cuid())
+  walletId  String
+  wallet    Wallet   @relation(fields: [walletId], references: [id])
+  last4     String // e.g., "4242"
+  brand     String   @default("Visa") // "Visa", "Mastercard"
+  expMonth  Int      @default(12)
+  expYear   Int      @default(2028)
+  status    String   @default("active") // "active", "frozen", "canceled"
+  currency  String // Copy from wallet
+  createdAt DateTime @default(now())
+
+  @@index([walletId])
+  @@index([status])
+}
+
+model Invoice {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  customerId   String?  
+  customerName String
+  customerEmail String
+  currency     String        @default("USD")
+  amount       Decimal
+  description  String?
+  dueDate      DateTime?
+  status       String        @default("draft")
+  paymentLink  String        @unique
+  paidAt       DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+
+  transactions Transaction[] @relation("InvoiceTransactions")
+}
